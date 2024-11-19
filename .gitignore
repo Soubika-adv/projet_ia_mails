@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Models DP
+best_model/
+
 # C extensions
 *.so
 
