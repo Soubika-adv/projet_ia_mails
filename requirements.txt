@@ -1,0 +1,5 @@
+uvicorn
+torch
+fastapi
+transformers
+sqlalchemy
