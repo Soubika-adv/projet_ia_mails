@@ -9,4 +9,4 @@ class EmailPrediction(Base):
 
     id_payeur = Column(Integer, primary_key=True, index = True)
     mail_payeur = Column(String, index = True)
-    prediction = Column(Integer)
+    deuxieme_prediction = Column(Integer)

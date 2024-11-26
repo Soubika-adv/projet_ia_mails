@@ -3,3 +3,4 @@ torch
 fastapi
 transformers
 sqlalchemy
+pymysql

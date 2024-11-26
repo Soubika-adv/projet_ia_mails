@@ -5,6 +5,8 @@ __pycache__/
 
 # Models DP
 best_model/
+best_2_model/
+best_2_pretrained_model_tokenizer/
 
 # C extensions
 *.so
