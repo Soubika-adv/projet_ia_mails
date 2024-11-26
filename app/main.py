@@ -32,48 +32,36 @@ def is_valid(email):
     return bool(re.match(email_regex, email))
 
 batch_size = 128
-@app.put('/cluster/{id_payeur}')
+@app.put('/prediction/{id_payeur}')
 def predict_and_update(db : Session = Depends(get_db)):
     email_entries = db.query(EmailPrediction).all()
 
-    #valid_email_entries = [entry for entry in email_entries if is_valid(entry.mail_payeur)]
-    all_emails = [entry.mail_payeur for entry in email_entries if is_valid(entry.mail_payeur)]
-    
-    if not all_emails:
-        return {"message": "Aucun e-mail valide trouvé."}
+    for i in range(0, len(email_entries), batch_size):
+        batch_entries = email_entries[i:i+batch_size]
+        adresses_mail = [entry.mail_payeur for entry in batch_entries]
 
-
-    all_embeddings = []
-
-    # Traitement par lot pour éviter des erreurs de mémoire
-    for i in range(0, len(all_emails), batch_size):
-        batch_emails = all_emails[i:i + batch_size]
+        invalid_emails = []
+        for idx, email in enumerate(adresses_mail):
+            if not is_valid(email):
+                batch_entries[idx].mail_payeur = None
+                invalid_emails.append(idx)
         
-        # Tokenizer et récupération des embeddings avec Camembert
-        inputs = tokenizer(batch_emails, padding=True, truncation=True, max_length=64, return_tensors='pt')
-        
-        with torch.no_grad():
-            outputs = model(**inputs)
-            batch_embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
-            all_embeddings.extend(batch_embeddings)
+        valid_emails = [adresses_mail for idx, email in enumerate(adresses_mail) if idx not in invalid_emails]
+        if valid_emails:
+            inputs = tokenizer(adresses_mail, padding = True, truncation = True, max_length = 64, return_tensors = 'pt')
 
-    # Étape 3: Application du clustering K-Means avec 2 clusters
-    kmeans = KMeans(n_clusters=2, random_state=42)
-    cluster_predictions = kmeans.fit_predict(all_embeddings)
+            with torch.no_grad():
+                outputs = model(**inputs)
+                logits = outputs.logits
+                predictions = torch.argmax(logits, axis = 1).cpu().numpy()
 
-    # Étape 4: Mise à jour des entrées dans la base de données
-    valid_idx = 0
-    for email_entry in email_entries:
-        if is_valid(email_entry.mail_payeur):
-            email_entry.cluster_prediction = int(cluster_predictions[valid_idx])
-            valid_idx += 1
-        else:
-            email_entry.cluster_prediction = None
+            valid_idx = 0
+            for idx, email_entry in enumerate(batch_entries):
+                if idx not in invalid_emails:
+                    email_entry.prediction = predictions[valid_idx]
+                    db.commit()
 
-        db.commit()
-
-    return {"message": f"{valid_idx} adresses ont été mises à jour avec des labels de cluster."}
-
+    return {"message": f"{len(email_entries)} adresses ont été prédites et mises à jour."}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8002)
